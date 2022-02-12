@@ -1,4 +1,4 @@
-import {Component} from 'react'
+import {useEffect, useReducer, useState} from 'react'
 import Loader from 'react-loader-spinner'
 import Cookies from 'js-cookie'
 
@@ -71,68 +71,95 @@ const apiStatusConstants = {
   failure: 'FAILURE',
   inProgress: 'IN_PROGRESS',
 }
-
-class AllProductsSection extends Component {
-  state = {
-    productsList: [],
-    apiStatus: apiStatusConstants.initial,
-    activeOptionId: sortbyOptions[0].optionId,
-    activeCategoryId: '',
-    searchInput: '',
-    activeRatingId: '',
-  }
-
-  componentDidMount() {
-    this.getProducts()
-  }
-
-  getProducts = async () => {
-    this.setState({
-      apiStatus: apiStatusConstants.inProgress,
-    })
-    const jwtToken = Cookies.get('jwt_token')
-    const {
-      activeOptionId,
-      activeCategoryId,
-      searchInput,
-      activeRatingId,
-    } = this.state
-    const apiUrl = `https://apis.ccbp.in/products?sort_by=${activeOptionId}&category=${activeCategoryId}&title_search=${searchInput}&rating=${activeRatingId}`
-    const options = {
-      headers: {
-        Authorization: `Bearer ${jwtToken}`,
-      },
-      method: 'GET',
-    }
-    const response = await fetch(apiUrl, options)
-    if (response.ok) {
-      const fetchedData = await response.json()
-      const updatedData = fetchedData.products.map(product => ({
-        title: product.title,
-        brand: product.brand,
-        price: product.price,
-        id: product.id,
-        imageUrl: product.image_url,
-        rating: product.rating,
-      }))
-      this.setState({
-        productsList: updatedData,
+const initialState = {
+  productsList: [],
+  apiStatus: apiStatusConstants.initial,
+  activeOptionId: sortbyOptions[0].optionId,
+  activeCategoryId: '',
+  searchInput: '',
+  activeRatingId: '',
+}
+const reducer = (state, action) => {
+  switch (action.type) {
+    case apiStatusConstants.inProgress:
+      return {...state, apiStatus: apiStatusConstants.inProgress}
+    case apiStatusConstants.success:
+      return {
+        ...state,
         apiStatus: apiStatusConstants.success,
-      })
-    } else {
-      this.setState({
-        apiStatus: apiStatusConstants.failure,
-      })
-    }
+        productsList: action.payload,
+      }
+    case apiStatusConstants.failure:
+      console.log(action.payload)
+      return {...state, apiStatus: apiStatusConstants.failure}
+    case 'SORT':
+      return {...state, activeOptionId: action.payload}
+    case 'RATING':
+      return {...state, activeRatingId: action.payload}
+    case 'CATEGORY':
+      return {...state, activeCategoryId: action.payload}
+    case 'CLEAR':
+      return {
+        ...state,
+        activeCategoryId: '',
+        searchInput: '',
+        activeRatingId: '',
+      }
+    case 'SEARCHTEXT':
+      return {...state, searchInput: action.payload}
+    default:
+      return state
   }
+}
 
-  renderLoadingView = () => (
+function AllProductsSection() {
+  const [state, dispatch] = useReducer(reducer, initialState)
+  const [searchText, setsearchText] = useState('')
+  const {
+    activeOptionId,
+    activeCategoryId,
+    searchInput,
+    activeRatingId,
+    productsList,
+  } = state
+  useEffect(() => {
+    const getProducts = async () => {
+      dispatch({type: apiStatusConstants.inProgress})
+
+      const jwtToken = Cookies.get('jwt_token')
+      const apiUrl = `https://apis.ccbp.in/products?sort_by=${activeOptionId}&category=${activeCategoryId}&title_search=${searchInput}&rating=${activeRatingId}`
+      const options = {
+        headers: {
+          Authorization: `Bearer ${jwtToken}`,
+        },
+        method: 'GET',
+      }
+      const response = await fetch(apiUrl, options)
+      if (response.ok) {
+        const fetchedData = await response.json()
+        const updatedData = fetchedData.products.map(product => ({
+          title: product.title,
+          brand: product.brand,
+          price: product.price,
+          id: product.id,
+          imageUrl: product.image_url,
+          rating: product.rating,
+        }))
+        dispatch({type: apiStatusConstants.success, payload: updatedData})
+      } else {
+        dispatch({type: apiStatusConstants.failure})
+      }
+    }
+    getProducts()
+  }, [activeOptionId, activeCategoryId, searchInput, activeRatingId])
+
+  const renderLoadingView = () => (
     <div className="products-loader-container">
       <Loader type="ThreeDots" color="#0b69ff" height="50" width="50" />
     </div>
   )
 
-  renderFailureView = () => (
+  const renderFailureView = () => (
     <div className="products-error-view-container">
       <img
         src="https://assets.ccbp.in/frontend/react-js/nxt-trendz/nxt-trendz-products-error-view.png"
@@ -148,12 +175,11 @@ class AllProductsSection extends Component {
     </div>
   )
 
-  changeSortby = activeOptionId => {
-    this.setState({activeOptionId}, this.getProducts)
+  const changeSortby = OptionId => {
+    dispatch({type: 'SORT', payload: OptionId})
   }
 
-  renderProductsListView = () => {
-    const {productsList, activeOptionId} = this.state
+  const renderProductsListView = () => {
     const shouldShowProductsList = productsList.length > 0
 
     return shouldShowProductsList ? (
@@ -161,7 +187,7 @@ class AllProductsSection extends Component {
         <ProductsHeader
           activeOptionId={activeOptionId}
           sortbyOptions={sortbyOptions}
-          changeSortby={this.changeSortby}
+          changeSortby={changeSortby}
         />
         <ul className="products-list">
           {productsList.map(product => (
@@ -184,69 +210,56 @@ class AllProductsSection extends Component {
     )
   }
 
-  renderAllProducts = () => {
-    const {apiStatus} = this.state
-
+  const renderAllProducts = () => {
+    const {apiStatus} = state
     switch (apiStatus) {
       case apiStatusConstants.success:
-        return this.renderProductsListView()
+        return renderProductsListView()
       case apiStatusConstants.failure:
-        return this.renderFailureView()
+        return renderFailureView()
       case apiStatusConstants.inProgress:
-        return this.renderLoadingView()
+        return renderLoadingView()
       default:
         return null
     }
   }
 
-  clearFilters = () => {
-    this.setState(
-      {
-        searchInput: '',
-        activeCategoryId: '',
-        activeRatingId: '',
-      },
-      this.getProducts,
-    )
+  const clearFilters = () => {
+    dispatch({type: 'CLEAR'})
   }
 
-  changeRating = activeRatingId => {
-    this.setState({activeRatingId}, this.getProducts)
+  const changeRating = RatingId => {
+    dispatch({type: 'RATING', payload: RatingId})
   }
 
-  changeCategory = activeCategoryId => {
-    this.setState({activeCategoryId}, this.getProducts)
+  const changeCategory = CategoryId => {
+    dispatch({type: 'CATEGORY', payload: CategoryId})
   }
 
-  enterSearchInput = () => {
-    this.getProducts()
+  const enterSearchInput = () => {
+    dispatch({type: 'SEARCHTEXT', payload: searchText})
   }
 
-  changeSearchInput = searchInput => {
-    this.setState({searchInput})
+  const changeSearchInput = Input => {
+    setsearchText(Input)
   }
-
-  render() {
-    const {activeCategoryId, searchInput, activeRatingId} = this.state
-
-    return (
-      <div className="all-products-section">
-        <FiltersGroup
-          searchInput={searchInput}
-          categoryOptions={categoryOptions}
-          ratingsList={ratingsList}
-          changeSearchInput={this.changeSearchInput}
-          enterSearchInput={this.enterSearchInput}
-          activeCategoryId={activeCategoryId}
-          activeRatingId={activeRatingId}
-          changeCategory={this.changeCategory}
-          changeRating={this.changeRating}
-          clearFilters={this.clearFilters}
-        />
-        {this.renderAllProducts()}
-      </div>
-    )
-  }
+  return (
+    <div className="all-products-section">
+      <FiltersGroup
+        searchInput={searchText}
+        categoryOptions={categoryOptions}
+        ratingsList={ratingsList}
+        changeSearchInput={changeSearchInput}
+        enterSearchInput={enterSearchInput}
+        activeCategoryId={activeCategoryId}
+        activeRatingId={activeRatingId}
+        changeCategory={changeCategory}
+        changeRating={changeRating}
+        clearFilters={clearFilters}
+      />
+      {renderAllProducts()}
+    </div>
+  )
 }
 
 export default AllProductsSection

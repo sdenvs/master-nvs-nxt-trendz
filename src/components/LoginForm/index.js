@@ -1,41 +1,71 @@
-import {Component} from 'react'
 import Cookies from 'js-cookie'
 import {Redirect} from 'react-router-dom'
+import {useReducer} from 'react'
 
 import './index.css'
 
-class LoginForm extends Component {
-  state = {
-    username: 'rahul',
-    password: 'rahul@2021',
-    showSubmitError: false,
-    errorMsg: '',
+const loginactionTypes = {
+  userChange: 'USER-ONCHANGE',
+  passChange: 'PASS-ONCHANGE',
+  loginSuccess: 'LOGIN-SUCEESS',
+  loginFailed: 'LOGIN-FAILED',
+}
+
+const initialState = {
+  username: 'rahul',
+  password: 'rahul@2021',
+  showSubmitError: false,
+  errorMsg: '',
+}
+
+const reducer = (state, action) => {
+  switch (action.type) {
+    case loginactionTypes.userChange:
+      return {...state, username: action.payload}
+    case loginactionTypes.passChange:
+      return {...state, password: action.payload}
+    case loginactionTypes.loginSuccess:
+      return {...state, showSubmitError: false}
+    case loginactionTypes.loginFailed:
+      return {...state, showSubmitError: true, errorMsg: action.payload}
+    default:
+      return state
+  }
+}
+
+function LoginForm(props) {
+  const [state, dispatch] = useReducer(reducer, initialState)
+
+  const jwtToken = Cookies.get('jwt_token')
+  if (jwtToken !== undefined) {
+    return <Redirect to="/" />
   }
 
-  onChangeUsername = event => {
-    this.setState({username: event.target.value})
+  const onChangeUsername = event => {
+    dispatch({type: loginactionTypes.userChange, payload: event.target.value})
   }
 
-  onChangePassword = event => {
-    this.setState({password: event.target.value})
+  const onChangePassword = event => {
+    dispatch({type: loginactionTypes.passChange, payload: event.target.value})
   }
 
-  onSubmitSuccess = jwtToken => {
-    const {history} = this.props
+  const onSubmitSuccess = jwtTokenToSet => {
+    const {history} = props
+    dispatch({type: loginactionTypes.loginSuccess})
 
-    Cookies.set('jwt_token', jwtToken, {
+    Cookies.set('jwt_token', jwtTokenToSet, {
       expires: 30,
     })
     history.replace('/')
   }
 
-  onSubmitFailure = errorMsg => {
-    this.setState({showSubmitError: true, errorMsg})
+  const onSubmitFailure = errorMsg => {
+    dispatch({type: loginactionTypes.passChange, payload: errorMsg})
   }
 
-  submitForm = async event => {
+  const submitForm = async event => {
     event.preventDefault()
-    const {username, password} = this.state
+    const {username, password} = state
     const userDetails = {username, password}
     const url = 'https://apis.ccbp.in/login'
     const options = {
@@ -45,14 +75,14 @@ class LoginForm extends Component {
     const response = await fetch(url, options)
     const data = await response.json()
     if (response.ok === true) {
-      this.onSubmitSuccess(data.jwt_token)
+      onSubmitSuccess(data.jwt_token)
     } else {
-      this.onSubmitFailure(data.error_msg)
+      onSubmitFailure(data.error_msg)
     }
   }
 
-  renderPasswordField = () => {
-    const {password} = this.state
+  const renderPasswordField = () => {
+    const {password} = state
 
     return (
       <>
@@ -64,15 +94,15 @@ class LoginForm extends Component {
           id="password"
           className="password-input-field"
           value={password}
-          onChange={this.onChangePassword}
+          onChange={onChangePassword}
           placeholder="Password"
         />
       </>
     )
   }
 
-  renderUsernameField = () => {
-    const {username} = this.state
+  const renderUsernameField = () => {
+    const {username} = state
 
     return (
       <>
@@ -84,49 +114,42 @@ class LoginForm extends Component {
           id="username"
           className="username-input-field"
           value={username}
-          onChange={this.onChangeUsername}
+          onChange={onChangeUsername}
           placeholder="Username"
         />
       </>
     )
   }
 
-  render() {
-    const {showSubmitError, errorMsg} = this.state
-    const jwtToken = Cookies.get('jwt_token')
+  const {showSubmitError, errorMsg} = state
 
-    if (jwtToken !== undefined) {
-      return <Redirect to="/" />
-    }
-
-    return (
-      <div className="login-form-container">
+  return (
+    <div className="login-form-container">
+      <img
+        src="https://assets.ccbp.in/frontend/react-js/nxt-trendz-logo-img.png"
+        className="login-website-logo-mobile-img"
+        alt="website logo"
+      />
+      <img
+        src="https://assets.ccbp.in/frontend/react-js/nxt-trendz-login-img.png"
+        className="login-img"
+        alt="website login"
+      />
+      <form className="form-container" onSubmit={submitForm}>
         <img
           src="https://assets.ccbp.in/frontend/react-js/nxt-trendz-logo-img.png"
-          className="login-website-logo-mobile-img"
+          className="login-website-logo-desktop-img"
           alt="website logo"
         />
-        <img
-          src="https://assets.ccbp.in/frontend/react-js/nxt-trendz-login-img.png"
-          className="login-img"
-          alt="website login"
-        />
-        <form className="form-container" onSubmit={this.submitForm}>
-          <img
-            src="https://assets.ccbp.in/frontend/react-js/nxt-trendz-logo-img.png"
-            className="login-website-logo-desktop-img"
-            alt="website logo"
-          />
-          <div className="input-container">{this.renderUsernameField()}</div>
-          <div className="input-container">{this.renderPasswordField()}</div>
-          <button type="submit" className="login-button">
-            Login
-          </button>
-          {showSubmitError && <p className="error-message">*{errorMsg}</p>}
-        </form>
-      </div>
-    )
-  }
+        <div className="input-container">{renderUsernameField()}</div>
+        <div className="input-container">{renderPasswordField()}</div>
+        <button type="submit" className="login-button">
+          Login
+        </button>
+        {showSubmitError && <p className="error-message">*{errorMsg}</p>}
+      </form>
+    </div>
+  )
 }
 
 export default LoginForm
